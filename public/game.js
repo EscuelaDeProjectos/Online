@@ -10,6 +10,7 @@ const fCooldownSpan = document.getElementById('FCooldown');
 const rCooldownSpan = document.getElementById('RCooldown');
 const cCooldownSpan = document.getElementById('CCooldown');
 let gameOver = false;
+let socket = null;
 
 // Game Objects
 const player1 = {
@@ -34,6 +35,10 @@ const player2 = {
   lastHitAt: 0,
   invulnDuration: 150,
 };
+
+// Local player reference (will be either player1 or player2 based on role)
+let localPlayer = player1;
+let remotePlayer = player2;
 
 const projectiles = [];
 
@@ -68,6 +73,17 @@ player1.x = canvas.width / 2;
 player1.y = canvas.height / 20;
 player2.x = canvas.width / 2;
 player2.y = canvas.height - 50;
+
+// Set local player based on role
+function setPlayerRole() {
+  if (window.gameMode === 'multiplayer' && window.playerRole === 'player2') {
+    localPlayer = player2;
+    remotePlayer = player1;
+  } else {
+    localPlayer = player1;
+    remotePlayer = player2;
+  }
+}
 
 let mouseX = 400;
 let mouseY = 300;
@@ -122,21 +138,27 @@ window.addEventListener('keydown', (e) => {
   if (k === 'q') {
     const elapsed = Date.now() - lastFireballTime;
     if (elapsed >= fireballCooldown) {
-      const dx = mouseX - player1.x;
-      const dy = mouseY - player1.y;
+      const dx = mouseX - localPlayer.x;
+      const dy = mouseY - localPlayer.y;
       const distance = Math.hypot(dx, dy);
       if (distance > 0) {
-        projectiles.push({
-          x: player1.x,
-          y: player1.y,
+        const projectile = {
+          x: localPlayer.x,
+          y: localPlayer.y,
           vx: (dx / distance) * fireballSpeed,
           vy: (dy / distance) * fireballSpeed,
           size: 5,
           color: 'red',
           type: 'fireball',
-          owner: 'player1',
-        });
+          owner: localPlayer === player1 ? 'player1' : 'player2',
+        };
+        projectiles.push(projectile);
         lastFireballTime = Date.now();
+        
+        // Send ability fire to opponent in multiplayer
+        if (window.gameMode === 'multiplayer' && socket) {
+          socket.emit('ability_fire', { matchId: window.matchId, projectile });
+        }
       }
     }
   }
@@ -144,21 +166,27 @@ window.addEventListener('keydown', (e) => {
   if (k === 'e') {
     const elapsed = Date.now() - lastPurpleTime;
     if (elapsed >= purpleCooldown) {
-      const dx = mouseX - player1.x;
-      const dy = mouseY - player1.y;
+      const dx = mouseX - localPlayer.x;
+      const dy = mouseY - localPlayer.y;
       const distance = Math.hypot(dx, dy);
       if (distance > 0) {
-        projectiles.push({
-          x: player1.x,
-          y: player1.y,
+        const projectile = {
+          x: localPlayer.x,
+          y: localPlayer.y,
           vx: (dx / distance) * fireballSpeed,
           vy: (dy / distance) * fireballSpeed,
           size: 12,
           color: 'purple',
           type: 'purple',
-          owner: 'player1',
-        });
+          owner: localPlayer === player1 ? 'player1' : 'player2',
+        };
+        projectiles.push(projectile);
         lastPurpleTime = Date.now();
+        
+        // Send ability fire to opponent in multiplayer
+        if (window.gameMode === 'multiplayer' && socket) {
+          socket.emit('ability_fire', { matchId: window.matchId, projectile });
+        }
       }
     }
   }
@@ -166,12 +194,12 @@ window.addEventListener('keydown', (e) => {
   if (k === 'f') {
     const elapsed = Date.now() - lastWindWallTime;
     if (elapsed >= windWallCooldown) {
-      const dx = mouseX - player1.x;
-      const dy = mouseY - player1.y;
+      const dx = mouseX - localPlayer.x;
+      const dy = mouseY - localPlayer.y;
       const distance = Math.hypot(dx, dy);
       if (distance > 0) {
-        const wallX = player1.x + (dx / distance) * windWallOffset;
-        const wallY = player1.y + (dy / distance) * windWallOffset;
+        const wallX = localPlayer.x + (dx / distance) * windWallOffset;
+        const wallY = localPlayer.y + (dy / distance) * windWallOffset;
         const angle = Math.atan2(dy, dx);
         windWall = {
           x: wallX,
@@ -190,21 +218,27 @@ window.addEventListener('keydown', (e) => {
   if (k === 'r') {
     const elapsed = Date.now() - lastSuperFireballTime;
     if (elapsed >= superFireballCooldown) {
-      const dx = mouseX - player1.x;
-      const dy = mouseY - player1.y;
+      const dx = mouseX - localPlayer.x;
+      const dy = mouseY - localPlayer.y;
       const distance = Math.hypot(dx, dy);
       if (distance > 0) {
-        projectiles.push({
-          x: player1.x,
-          y: player1.y,
+        const projectile = {
+          x: localPlayer.x,
+          y: localPlayer.y,
           vx: (dx / distance) * superFireballSpeed,
           vy: (dy / distance) * superFireballSpeed,
           size: 50,
           color: 'red',
           type: 'superFireball',
-          owner: 'player1',
-        });
+          owner: localPlayer === player1 ? 'player1' : 'player2',
+        };
+        projectiles.push(projectile);
         lastSuperFireballTime = Date.now();
+        
+        // Send ability fire to opponent in multiplayer
+        if (window.gameMode === 'multiplayer' && socket) {
+          socket.emit('ability_fire', { matchId: window.matchId, projectile });
+        }
       }
     }
   }
@@ -212,13 +246,13 @@ window.addEventListener('keydown', (e) => {
   if (k === 'c') {
     const elapsed = Date.now() - lastDashTime;
     if (elapsed >= dashCooldown) {
-      const dx = mouseX - player1.x;
-      const dy = mouseY - player1.y;
+      const dx = mouseX - localPlayer.x;
+      const dy = mouseY - localPlayer.y;
       const distance = Math.hypot(dx, dy);
       if (distance > 0) {
         const dashDistance = Math.min(distance, 75);
-        player1.x += (dx / distance) * dashDistance;
-        player1.y += (dy / distance) * dashDistance;
+        localPlayer.x += (dx / distance) * dashDistance;
+        localPlayer.y += (dy / distance) * dashDistance;
         lastDashTime = Date.now();
       }
     }
@@ -235,8 +269,51 @@ window.addEventListener('mousemove', (e) => {
   mouseY = e.clientY - rect.top;
 });
 
+// Socket event listeners for multiplayer
+function setupSocketListeners() {
+  if (!socket) return;
+  
+  socket.on('ability_fire', (data) => {
+    if (data.projectile) {
+      const proj = data.projectile;
+      // Set owner to remote player
+      proj.owner = localPlayer === player1 ? 'player2' : 'player1';
+      projectiles.push(proj);
+    }
+  });
+  
+  socket.on('player_update', (data) => {
+    if (data.x !== undefined) remotePlayer.x = data.x;
+    if (data.y !== undefined) remotePlayer.y = data.y;
+    if (data.hp !== undefined) remotePlayer.hp = data.hp;
+  });
+  
+  socket.on('player_left', (data) => {
+    if (window.gameMode === 'multiplayer') {
+      showMessage('Opponent disconnected', 'orange');
+      window.gameMode = 'practice';
+      window.opponent = null;
+    }
+  });
+  
+  socket.on('match_end', (data) => {
+    const player = JSON.parse(localStorage.getItem('player'));
+    const playerWon = data.winnerId === player.id;
+    showGameOver(playerWon);
+  });
+}
+
 function gameLoop() {
   const player1speed = 3;
+
+  // Set player role based on game mode
+  setPlayerRole();
+
+  // Check if socket is available and setup listeners if needed
+  if (window.gameMode === 'multiplayer' && window.gameSocket && !socket) {
+    socket = window.gameSocket;
+    setupSocketListeners();
+  }
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   updateCooldownHud();
@@ -286,15 +363,15 @@ function gameLoop() {
       ctx.fill();
     }
 
-    if (projectile.owner !== 'player1') {
+    if (projectile.owner !== (localPlayer === player1 ? 'player1' : 'player2')) {
       const now = Date.now();
-      const canBeHit = now - player1.lastHitAt >= player1.invulnDuration;
+      const canBeHit = now - localPlayer.lastHitAt >= localPlayer.invulnDuration;
       if (canBeHit) {
         const projectileRadius = projectile.type === 'purple' ? projectile.size / 2 : projectile.size;
-        const hitRadius = player1.size + projectileRadius;
+        const hitRadius = localPlayer.size + projectileRadius;
         const collided = segmentCircleCollision(
-          player1.x,
-          player1.y,
+          localPlayer.x,
+          localPlayer.y,
           hitRadius,
           previousX,
           previousY,
@@ -303,24 +380,24 @@ function gameLoop() {
         );
         if (collided) {
           const dmg = projectile.type === 'superFireball' ? 50 : projectile.type === 'purple' ? 30 : 10;
-          player1.hp = Math.max(0, player1.hp - dmg);
-          player1.lastHitAt = now;
+          localPlayer.hp = Math.max(0, localPlayer.hp - dmg);
+          localPlayer.lastHitAt = now;
           projectiles.splice(i, 1);
           continue;
         }
       }
     }
 
-    // Check collision with player2
-    if (projectile.owner === 'player1') {
+    // Check collision with remote player
+    if (projectile.owner === (localPlayer === player1 ? 'player1' : 'player2')) {
       const now = Date.now();
-      const canBeHit = now - player2.lastHitAt >= player2.invulnDuration;
+      const canBeHit = now - remotePlayer.lastHitAt >= remotePlayer.invulnDuration;
       if (canBeHit) {
         const projectileRadius = projectile.type === 'purple' ? projectile.size / 2 : projectile.size;
-        const hitRadius = player2.size + projectileRadius;
+        const hitRadius = remotePlayer.size + projectileRadius;
         const collided = segmentCircleCollision(
-          player2.x,
-          player2.y,
+          remotePlayer.x,
+          remotePlayer.y,
           hitRadius,
           previousX,
           previousY,
@@ -329,8 +406,8 @@ function gameLoop() {
         );
         if (collided) {
           const dmg = projectile.type === 'superFireball' ? 50 : projectile.type === 'purple' ? 30 : 10;
-          player2.hp = Math.max(0, player2.hp - dmg);
-          player2.lastHitAt = now;
+          remotePlayer.hp = Math.max(0, remotePlayer.hp - dmg);
+          remotePlayer.lastHitAt = now;
           projectiles.splice(i, 1);
           continue;
         }
@@ -347,12 +424,12 @@ function gameLoop() {
     }
   }
 
-  if (player1.hp <= 0 && !gameOver) {
-    showGameOver(false); // player1 lost
+  if (localPlayer.hp <= 0 && !gameOver) {
+    showGameOver(false); // local player lost
   }
 
-  if (player2.hp <= 0 && !gameOver) {
-    showGameOver(true); // player1 won
+  if (remotePlayer.hp <= 0 && !gameOver) {
+    showGameOver(true); // local player won
   }
 
   if (gameOver) {
@@ -362,16 +439,22 @@ function gameLoop() {
 
   updateAI();
 
-  if (keysPressed['w']) player1.y -= player1speed;
-  if (keysPressed['s']) player1.y += player1speed;
-  if (keysPressed['a']) player1.x -= player1speed;
-  if (keysPressed['d']) player1.x += player1speed;
+  if (keysPressed['w']) localPlayer.y -= player1speed;
+  if (keysPressed['s']) localPlayer.y += player1speed;
+  if (keysPressed['a']) localPlayer.x -= player1speed;
+  if (keysPressed['d']) localPlayer.x += player1speed;
 
-  if (player1.x < 0) player1.x = canvas.width;
-  else if (player1.x > canvas.width) player1.x = 0;
-  if (player1.y < 0) player1.y = canvas.height;
-  else if (player1.y > canvas.height) player1.y = 0;
+  // Send player position updates in multiplayer
+  if (window.gameMode === 'multiplayer' && socket) {
+    socket.emit('player_update', { matchId: window.matchId, x: localPlayer.x, y: localPlayer.y, hp: localPlayer.hp });
+  }
 
+  if (localPlayer.x < 0) localPlayer.x = canvas.width;
+  else if (localPlayer.x > canvas.width) localPlayer.x = 0;
+  if (localPlayer.y < 0) localPlayer.y = canvas.height;
+  else if (localPlayer.y > canvas.height) localPlayer.y = 0;
+
+  // Draw player1 (blue, top)
   ctx.beginPath();
   ctx.arc(player1.x, player1.y, player1.size, 0, Math.PI * 2);
   ctx.fillStyle = player1.color;
@@ -404,7 +487,7 @@ function gameLoop() {
   ctx.textBaseline = 'top';
   ctx.fillText(labelText, labelX + labelPadding, barY + barH + 2);
 
-  // Draw player2 (opponent)
+  // Draw player2 (red, bottom - opponent)
   ctx.beginPath();
   ctx.arc(player2.x, player2.y, player2.size, 0, Math.PI * 2);
   ctx.fillStyle = player2.color;
@@ -519,6 +602,8 @@ function resetGame() {
   if (gameOverOverlay) {
     gameOverOverlay.style.display = 'none';
   }
+  // Set player role after reset
+  setPlayerRole();
 }
 
 if (homeBtn) {
