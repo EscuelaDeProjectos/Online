@@ -99,9 +99,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('ability_fire', (data) => {
-    const { matchId } = data || {};
-    if (!matchId) return;
-    socket.to(matchId).emit('ability_fire', data);
+    const { matchId, projectile } = data || {};
+    if (!matchId || !projectile) return;
+    socket.to(matchId).emit('ability_fire', { projectile });
   });
 
   socket.on('match_end', (data) => {
@@ -115,6 +115,17 @@ io.on('connection', (socket) => {
     const info = socketPlayerMap.get(socket.id);
     if (info && info.matchId) {
       socket.to(info.matchId).emit('player_left', { playerId: info.playerId });
+    }
+    // Remove from matchmaking queue if present
+    if (info) {
+      const queueIdx = matchmakingQueue.findIndex(p => p.playerId === info.playerId);
+      if (queueIdx >= 0) {
+        matchmakingQueue.splice(queueIdx, 1);
+      }
+      // Clear pending match notification
+      if (pendingMatches[info.playerId]) {
+        delete pendingMatches[info.playerId];
+      }
     }
     socketPlayerMap.delete(socket.id);
   });
@@ -140,18 +151,20 @@ app.post('/api/matchmaking/join', (req, res) => {
   const opponent = matchmakingQueue.shift();
   const matchId = `match_${Date.now()}`;
 
-  // Notify the joining player immediately
+  // Notify the joining player immediately (they will be player2 - red, bottom)
   res.json({
     matched: true,
     matchId,
+    role: 'player2',
     opponent: { id: opponent.playerId, name: opponent.playerName },
     player: { id: playerId, name: playerName },
   });
 
-  // Store pending match for the opponent so they can be notified when they poll
+  // Store pending match for the opponent (they will be player1 - blue, top)
   pendingMatches[opponent.playerId] = {
     matched: true,
     matchId,
+    role: 'player1',
     opponent: { id: playerId, name: playerName },
   };
 });

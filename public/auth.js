@@ -134,6 +134,7 @@ window.addEventListener('DOMContentLoaded', () => {
       window.gameMode = 'multiplayer';
       window.opponent = data.opponent;
       window.matchId = data.matchId;
+      window.playerRole = data.role || 'player1';
       matchmakingOverlay.style.display = 'none';
       homePanel.style.display = 'none';
       battlePanel.style.display = 'block';
@@ -143,7 +144,12 @@ window.addEventListener('DOMContentLoaded', () => {
       // connect socket and join match room
       if (window.io) {
         window.socket = window.io();
-        window.socket.emit('join_match', { matchId: window.matchId, playerId: player.id, playerName: player.name });
+        window.socket.emit('join_match', { matchId: window.matchId, playerId: player.id, playerName: player.name, role: window.playerRole });
+        // Setup socket listeners in game.js
+        if (typeof setupSocketListeners === 'function') {
+          // Pass the socket to game.js
+          window.gameSocket = window.socket;
+        }
       }
       showMessage(`Found opponent: ${data.opponent.name}! Fight!`, 'lightgreen');
     } else {
@@ -163,6 +169,7 @@ window.addEventListener('DOMContentLoaded', () => {
             window.gameMode = 'multiplayer';
             window.opponent = pollData.opponent;
             window.matchId = pollData.matchId;
+            window.playerRole = pollData.role || 'player1';
             matchmakingOverlay.style.display = 'none';
             homePanel.style.display = 'none';
             battlePanel.style.display = 'block';
@@ -171,7 +178,11 @@ window.addEventListener('DOMContentLoaded', () => {
             if (canvas) canvas.style.display = 'block';
             if (window.io) {
               window.socket = window.io();
-              window.socket.emit('join_match', { matchId: window.matchId, playerId: player.id, playerName: player.name });
+              window.socket.emit('join_match', { matchId: window.matchId, playerId: player.id, playerName: player.name, role: window.playerRole });
+              // Setup socket listeners in game.js
+              if (typeof setupSocketListeners === 'function') {
+                window.gameSocket = window.socket;
+              }
             }
             showMessage(`Found opponent: ${pollData.opponent.name}! Fight!`, 'lightgreen');
           }
